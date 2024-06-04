@@ -105,7 +105,12 @@ class MouseEvent(Pos):
             if self.isRelease and self.duration >= 0:
                 time.sleep(self.duration)
                 controller.release(self.button)
+        elif self.isRelease:
+            controller.release(self.button)
         time.sleep(self.delayA)
 
     def pos(self):
         return Pos(self.x, self.y)
+
+    def __str__(self):
+        return f'Pos: {self.pos()}; isPress: {self.isPress}; isRelease: {self.isRelease}; delayB: {self.delayB}; duration: {self.duration}; delayA: {self.delayA}; button: {self.button}; local: {self.local}'

@@ -1,69 +1,123 @@
-import pygame as pg
+import time
 import pynput.mouse as mouse
-import screeninfo
-import classes as cl
+import pynput.keyboard as keyb
+import objects as cl
 import threading as thr
-import json
-
-WINDOW_SIZE = cl.Pos(screeninfo.get_monitors()[-1].width, screeninfo.get_monitors()[-1].height)
+import multiprocessing as mp
 
 
 def doing(poses):
+    global isDoing
+    t = time.time()
     mCon = mouse.Controller()
     for i in poses:
-        assert not ((i.pos() > WINDOW_SIZE or i.pos() < 0) and not i.local)
-        i.do(mCon)
+        if isDoing:
+            i.do(mCon)
+    print(f'Doing took {time.time() - t} s')
+    isDoing = False
+
+
+def keyHandler():
+    print('KeyHandler started')
+    def onPress(key):
+        global isRecording, recordingThr, result, isRecordingFinished, isRecordingPaused, isDoing, poses, run
+        print('Key pressed')
+        if key == keyb.Key.shift_r and not isRecordingFinished:
+            isRecording = not isRecording
+            isRecordingPaused = False
+            if isRecording:
+                recordingThr = thr.Thread(target=recording, daemon=True)
+                recordingThr.start()
+            else:
+                while not recordingThr.is_alive():
+                    continue
+                recordingThr.join()
+                result = recordingThr.result
+                isRecordingFinished = True
+        elif key == keyb.Key.ctrl_r:
+            isRecordingPaused = not isRecordingPaused
+        elif key == keyb.Key.insert:
+            isDoing = True
+            doingThr = thr.Thread(target=doing, daemon=True, args=(poses,))
+            doingThr.start()
+        elif key == keyb.Key.end:
+            run = False
+
+    kLis = keyb.Listener(on_press=onPress)
+    kLis.start()
 
 
 def recording() -> list[cl.MouseEvent]:
-    return
+    global isRecording, curTime, isRecordingPaused
+
+    recorded = []
+
+    curTime = time.time()
+
+    def logMove(x, y):
+        global curTime
+        if not isRecording:
+            return False
+        if isRecordingPaused:
+            curTime = time.time()
+            pass
+        elif isRecording:
+            print('Move!')
+            recorded.append(
+                cl.MouseEvent(delayB=time.time() - curTime, isPress=False, isRelease=False, local=False, x=x, y=y))
+            curTime = time.time()
+
+    def logClick(x, y, button, pressed):
+        global curTime
+        if not isRecording:
+            return False
+        if isRecordingPaused:
+            curTime = time.time()
+            pass
+        elif isRecording:
+            print('Click!')
+            recorded.append(
+                cl.MouseEvent(delayB=time.time() - curTime, isPress=pressed, isRelease=not pressed, button=button))
+            curTime = time.time()
+
+    mLis = mouse.Listener(
+        on_move=logMove,
+        on_click=logClick)
+    mLis.start()
+    while isRecording:
+        if isRecordingPaused:
+            curTime = time.time()
+    mLis.stop()
+    mLis.join()
+
+    print(recorded)
+    thr.current_thread().result = recorded
 
 
 def main():
-    pg.init()
+    global isRecording, isRecordingFinished, result, isRecordingPaused, poses, run
 
-    config = {}
+    poses = [cl.MouseEvent(delayB=95)]
 
-    with open('config.json') as f:
-        try:
-            config = json.loads(f.read())
-        except json.decoder.JSONDecodeError as ex:
-            if 'FPS' not in config.keys():
-                config['FPS'] = 60
-            if 'WIDTH' not in config.keys():
-                config['WIDTH'] = WINDOW_SIZE.x
-            if 'HEIGHT' not in config.keys():
-                config['HEIGHT'] = WINDOW_SIZE.y
-            if 'FONT' not in config.keys():
-                config['FONT'] = 'Arial'
-            if 'FONT_SIZE' not in config.keys():
-                config['FONT_SIZE'] = 20
+    isRecording = False
 
-            with open('config.json', 'w') as f:
-                f.write(json.dumps(config))
+    keyHandlerThr = thr.Thread(target=keyHandler, daemon=True)
 
-    dis = pg.display.set_mode((config['WIDTH'], config['HEIGHT']))
+    keyHandlerThr.start()
 
-    clock = pg.time.Clock()
-
-    poses = []
-    doingThr = thr.Thread(target=doing, daemon=True, args=(poses,))
+    isRecordingFinished = False
+    isRecordingPaused = False
 
     run = True
-    text = cl.cnvs.Text(cl.Pos(1920/2, 0), 'I am flood', pg.font.SysFont('Arial', 20), [0, 0, 0], 1, isCenteredX=True)
-
     while run:
-        dis.fill([255, 255, 255])
-        for i in pg.event.get():
-            if i.type == pg.QUIT:
-                run = False
-            elif i.type == pg.KEYDOWN:
-                if i.key == pg.K_ESCAPE:
-                    run = False
-        text.draw(dis)
+        if isRecordingFinished:
+            t = time.time()
+            poses = result
 
-        pg.display.update()
-        clock.tick(config['FPS'])
+            isRecordingFinished = False
+            print('Recording was finished')
+
+        time.sleep(1/60)
 
 
 if __name__ == '__main__':
