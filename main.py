@@ -3,7 +3,6 @@ import pynput.mouse as mouse
 import pynput.keyboard as keyb
 import objects as cl
 import threading as thr
-import multiprocessing as mp
 
 
 def doing(poses):
@@ -19,6 +18,7 @@ def doing(poses):
 
 def keyHandler():
     print('KeyHandler started')
+
     def onPress(key):
         global isRecording, recordingThr, result, isRecordingFinished, isRecordingPaused, isDoing, poses, run
         print('Key pressed')
@@ -47,7 +47,7 @@ def keyHandler():
     kLis.start()
 
 
-def recording() -> list[cl.MouseEvent]:
+def recording():
     global isRecording, curTime, isRecordingPaused
 
     recorded = []
@@ -111,13 +111,12 @@ def main():
     run = True
     while run:
         if isRecordingFinished:
-            t = time.time()
             poses = result
 
             isRecordingFinished = False
             print('Recording was finished')
 
-        time.sleep(1/60)
+        time.sleep(1 / 60)
 
 
 if __name__ == '__main__':
